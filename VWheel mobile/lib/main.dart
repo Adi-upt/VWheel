@@ -9,10 +9,10 @@ import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// Controlador global para el idioma
+// Global Language Controller
 final ValueNotifier<String> appLanguage = ValueNotifier<String>('en');
 
-// Motor de traducciones
+// Translation Engine
 class Tr {
   static const Map<String, Map<String, String>> _strings = {
     'en': {
@@ -30,6 +30,10 @@ class Tr {
       'cancel': 'Cancel',
       'save': 'Save',
       'language': 'Language',
+      'sensor_mode': 'Steering Sensor',
+      'sensor_accel': 'Accelerometer (G-Sensor)',
+      'sensor_gyro': 'Gyroscope (Smooth)',
+      'sensor_fusion': 'Fusion (Recommended)',
       'button': 'Button',
       'pedal': 'Pedal',
       'telemetry': 'Telemetry',
@@ -80,6 +84,10 @@ class Tr {
       'cancel': 'Cancelar',
       'save': 'Guardar',
       'language': 'Idioma',
+      'sensor_mode': 'Sensor de Volante',
+      'sensor_accel': 'Acelerómetro (Gravedad)',
+      'sensor_gyro': 'Giroscopio (Suave)',
+      'sensor_fusion': 'Fusión (Recomendado)',
       'button': 'Botón',
       'pedal': 'Pedal',
       'telemetry': 'Telemetría',
@@ -125,7 +133,6 @@ class Tr {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Cargar idioma guardado antes de iniciar la app
   final prefs = await SharedPreferences.getInstance();
   appLanguage.value = prefs.getString('vwheel_lang') ?? 'en';
 
@@ -177,6 +184,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   String targetIp = "";
   bool isUsbMode = false;
   int activeSlot = 1;
+  int sensorMode = 2; // 0: Accel, 1: Gyro, 2: Fusion
   RawDatagramSocket? discoverySocket;
 
   @override
@@ -193,18 +201,21 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     setState(() {
       isUsbMode = prefs.getBool('vwheel_usb') ?? false;
       activeSlot = prefs.getInt('vwheel_active_slot') ?? 1;
+      sensorMode = prefs.getInt('vwheel_sensor_mode') ?? 2;
       if (isUsbMode) targetIp = "127.0.0.1";
     });
   }
 
-  Future<void> _saveSettings(bool usb, String lang) async {
+  Future<void> _saveSettings(bool usb, String lang, int sensor) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('vwheel_usb', usb);
     await prefs.setString('vwheel_lang', lang);
+    await prefs.setInt('vwheel_sensor_mode', sensor);
     appLanguage.value = lang;
 
     setState(() {
       isUsbMode = usb;
+      sensorMode = sensor;
       if (isUsbMode) {
         targetIp = "127.0.0.1";
       } else {
@@ -253,6 +264,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   void _showSettingsDialog() {
     bool tempUsb = isUsbMode;
     String tempLang = appLanguage.value;
+    int tempSensor = sensorMode;
 
     showDialog(
       context: context,
@@ -272,9 +284,20 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       DropdownMenuItem(value: 'es', child: Text("Español")),
                     ],
                     onChanged: (val) {
-                      if (val != null) {
-                        setDialogState(() => tempLang = val);
-                      }
+                      if (val != null) setDialogState(() => tempLang = val);
+                    },
+                  ),
+                  const SizedBox(height: 15),
+                  DropdownButtonFormField<int>(
+                    decoration: InputDecoration(labelText: Tr.get('sensor_mode')),
+                    initialValue: tempSensor,
+                    items: [
+                      DropdownMenuItem(value: 0, child: Text(Tr.get('sensor_accel'))),
+                      DropdownMenuItem(value: 1, child: Text(Tr.get('sensor_gyro'))),
+                      DropdownMenuItem(value: 2, child: Text(Tr.get('sensor_fusion'))),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setDialogState(() => tempSensor = val);
                     },
                   ),
                   const SizedBox(height: 15),
@@ -300,7 +323,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                 TextButton(onPressed: () => Navigator.pop(context), child: Text(Tr.get('cancel'))),
                 ElevatedButton(
                   onPressed: () {
-                    _saveSettings(tempUsb, tempLang);
+                    _saveSettings(tempUsb, tempLang, tempSensor);
                     Navigator.pop(context);
                   },
                   child: Text(Tr.get('save')),
@@ -312,6 +335,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       },
     );
   }
+
   void _showAboutDialog() {
     showDialog(
       context: context,
@@ -339,11 +363,11 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
               const SizedBox(height: 15),
               Text(Tr.get('feedback'), style: const TextStyle(color: Colors.white54, fontSize: 12)),
               const SizedBox(height: 5),
-              Row(
+              const Row(
                 children: [
-                  const Icon(Icons.alternate_email, size: 16, color: Colors.white54),
-                  const SizedBox(width: 5),
-                  const SelectableText("X: @ItsAdi916", style: TextStyle(color: Colors.blueAccent, fontSize: 16, fontWeight: FontWeight.w500)),
+                  Icon(Icons.alternate_email, size: 16, color: Colors.white54),
+                  SizedBox(width: 5),
+                  SelectableText("X: @ItsAdi916", style: TextStyle(color: Colors.blueAccent, fontSize: 16, fontWeight: FontWeight.w500)),
                 ],
               ),
             ],
@@ -371,11 +395,11 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'settings') _showSettingsDialog();
-              if (value == 'about') _showAboutDialog(); // NUEVA LÍNEA
+              if (value == 'about') _showAboutDialog();
             },
             itemBuilder: (BuildContext context) => [
               PopupMenuItem(value: 'settings', child: Text(Tr.get('settings'))),
-              PopupMenuItem(value: 'about', child: Text(Tr.get('about'))), // NUEVA LÍNEA
+              PopupMenuItem(value: 'about', child: Text(Tr.get('about'))),
             ],
           ),
         ],
@@ -772,7 +796,6 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  // F1/GT3 Style Telemetry UI
   Widget _buildTelemetryUI(double width, double height, {bool isSelected = false}) {
     return Container(
       width: width, height: height,
@@ -791,7 +814,6 @@ class _EditorScreenState extends State<EditorScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: List.generate(15, (index) {
                 Color ledColor;
-                // FIX LINTER: Bloques if y else con llaves obligatorias
                 if (index < 5) {
                   ledColor = Colors.greenAccent;
                 } else if (index < 10) {
@@ -805,12 +827,24 @@ class _EditorScreenState extends State<EditorScreen> {
                 );
               }),
             ),
+
           ),
           const Spacer(),
           const Text("N", style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Courier')),
           const Spacer(),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12.0, left: 10.0, right: 10.0),
+              child: FittedBox(
+                fit: BoxFit.contain,
+                child: const Text("N", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Courier')),
+              ),
+            ),
+          ),
         ],
+
       ),
+
     );
   }
 }
@@ -825,16 +859,24 @@ class PlayScreen extends StatefulWidget {
 class _PlayScreenState extends State<PlayScreen> {
   List<VWheelElement> uiElements = [];
   int activeSlot = 1;
+  int sensorMode = 2;
 
   RawDatagramSocket? udpSocket;
   RawDatagramSocket? ffbSocket;
   InternetAddress? pcAddress;
   final int port = 11000;
 
-  StreamSubscription<AccelerometerEvent>? _sensorSubscription;
-  double currentAngle = 0.0;
-  int buttonsState = 0;
+  // --- VARIABLES SENSOR FUSION ---
+  StreamSubscription<AccelerometerEvent>? _accelSub;
+  StreamSubscription<GyroscopeEvent>? _gyroSub;
+  Timer? _networkTimer;
+  DateTime _lastTime = DateTime.now();
 
+  double currentAngle = 0.0;
+  double accelAngle = 0.0;
+  double gyroRate = 0.0;
+
+  int buttonsState = 0;
   int throttleVal = 0;
   int brakeVal = 0;
   int clutchVal = 0;
@@ -846,24 +888,27 @@ class _PlayScreenState extends State<PlayScreen> {
   void initState() {
     super.initState();
     SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
-    _loadLayout();
+    _loadLayoutAndSettings();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final targetIp = ModalRoute.of(context)!.settings.arguments as String;
       _setupNetwork(targetIp);
-      _startSensor();
     });
   }
 
-  Future<void> _loadLayout() async {
+  Future<void> _loadLayoutAndSettings() async {
     final prefs = await SharedPreferences.getInstance();
     activeSlot = prefs.getInt('vwheel_active_slot') ?? 1;
+    sensorMode = prefs.getInt('vwheel_sensor_mode') ?? 2;
+
     final String? jsonLayout = prefs.getString('vwheel_layout_$activeSlot');
     if (jsonLayout != null) {
       setState(() {
         uiElements = (jsonDecode(jsonLayout) as List).map((i) => VWheelElement.fromJson(i)).toList();
       });
     }
+
+    _startSensorsAndHeartbeat();
   }
 
   Future<void> _setupNetwork(String ip) async {
@@ -887,10 +932,43 @@ class _PlayScreenState extends State<PlayScreen> {
     }
   }
 
-  void _startSensor() {
-    _sensorSubscription = accelerometerEventStream().listen((AccelerometerEvent event) {
-      double angleRadian = atan2(event.y, event.x);
-      currentAngle = (angleRadian * (180 / pi)).clamp(-180.0, 180.0);
+  // --- MOTOR DE SENSORES Y HEARTBEAT A 100 Hz ---
+  void _startSensorsAndHeartbeat() {
+    // 1. Escuchar Acelerómetro (si es necesario)
+    if (sensorMode == 0 || sensorMode == 2) {
+      _accelSub = accelerometerEventStream().listen((AccelerometerEvent event) {
+        accelAngle = (atan2(event.y, event.x) * (180 / pi)).clamp(-180.0, 180.0);
+      });
+    }
+
+    // 2. Escuchar Giroscopio (si es necesario)
+    if (sensorMode == 1 || sensorMode == 2) {
+      _gyroSub = gyroscopeEventStream().listen((GyroscopeEvent event) {
+        gyroRate = event.z * (180 / pi); // Grados por segundo
+      });
+    }
+
+    // 3. Heartbeat de Red a 100Hz (10 milisegundos)
+    _lastTime = DateTime.now();
+    _networkTimer = Timer.periodic(const Duration(milliseconds: 10), (timer) {
+      DateTime now = DateTime.now();
+      double dt = now.difference(_lastTime).inMicroseconds / 1000000.0; // Tiempo delta en segundos
+      _lastTime = now;
+
+      if (sensorMode == 0) {
+        // Solo Gravedad (Puede vibrar las manos)
+        currentAngle = accelAngle;
+      } else if (sensorMode == 1) {
+        // Solo Giroscopio (Suave pero sufre drift)
+        currentAngle += gyroRate * dt;
+        currentAngle = currentAngle.clamp(-180.0, 180.0);
+      } else if (sensorMode == 2) {
+        // Fusión: Filtro Complementario (Suave y sin drift)
+        double alpha = 0.96;
+        currentAngle = alpha * (currentAngle + gyroRate * dt) + (1.0 - alpha) * accelAngle;
+        currentAngle = currentAngle.clamp(-180.0, 180.0);
+      }
+
       _sendUdpPacket();
     });
   }
@@ -909,13 +987,11 @@ class _PlayScreenState extends State<PlayScreen> {
   void _handleButton(VWheelElement el, bool isPressed) {
     setState(() => buttonVisualStates[el.id] = isPressed);
     if (el.bindIndex < 32) {
-      // FIX LINTER: Llaves obligatorias
       if (isPressed) {
         buttonsState |= (1 << el.bindIndex);
       } else {
         buttonsState &= ~(1 << el.bindIndex);
       }
-      _sendUdpPacket();
     }
   }
 
@@ -925,25 +1001,23 @@ class _PlayScreenState extends State<PlayScreen> {
     setState(() => sliderVisualValues[el.id] = percent);
 
     int val = (percent * 32767).toInt();
-    // FIX LINTER: Llaves obligatorias
     if (el.bindIndex == 100) { throttleVal = val; }
     if (el.bindIndex == 101) { brakeVal = val; }
     if (el.bindIndex == 102) { clutchVal = val; }
-    _sendUdpPacket();
   }
 
   void _handleSliderRelease(VWheelElement el) {
     setState(() => sliderVisualValues[el.id] = 0.0);
-    // FIX LINTER: Llaves obligatorias
     if (el.bindIndex == 100) { throttleVal = 0; }
     if (el.bindIndex == 101) { brakeVal = 0; }
     if (el.bindIndex == 102) { clutchVal = 0; }
-    _sendUdpPacket();
   }
 
   @override
   void dispose() {
-    _sensorSubscription?.cancel();
+    _networkTimer?.cancel();
+    _accelSub?.cancel();
+    _gyroSub?.cancel();
     udpSocket?.close();
     ffbSocket?.close();
     super.dispose();
@@ -1053,7 +1127,6 @@ class _PlayScreenState extends State<PlayScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: List.generate(15, (index) {
                 Color ledColor;
-                // FIX LINTER: Llaves obligatorias
                 if (index < 5) {
                   ledColor = Colors.greenAccent;
                 } else if (index < 10) {

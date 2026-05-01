@@ -7,12 +7,12 @@
       "RelativeMoniker": "D:0:0:{AEEB3CEF-2FEC-4B70-B904-BA3C6F734B8A}|VWheel\\VWheel.csproj|solutionrelative:vwheel\\mainform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{AEEB3CEF-2FEC-4B70-B904-BA3C6F734B8A}|VWheel\\VWheel.csproj|S:\\Otros\\PROYECTO-VOLANTE-VIRTUAL\\VWheel\\vwheel\\mainform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form",
-      "RelativeMoniker": "D:0:0:{AEEB3CEF-2FEC-4B70-B904-BA3C6F734B8A}|VWheel\\VWheel.csproj|solutionrelative:vwheel\\mainform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{AEEB3CEF-2FEC-4B70-B904-BA3C6F734B8A}|VWheel\\VWheel.csproj|S:\\Otros\\PROYECTO-VOLANTE-VIRTUAL\\VWheel\\vwheel\\mainform.designer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{AEEB3CEF-2FEC-4B70-B904-BA3C6F734B8A}|VWheel\\VWheel.csproj|solutionrelative:vwheel\\mainform.designer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEEB3CEF-2FEC-4B70-B904-BA3C6F734B8A}|VWheel\\VWheel.csproj|S:\\Otros\\PROYECTO-VOLANTE-VIRTUAL\\VWheel\\vwheel\\mainform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form",
+      "RelativeMoniker": "D:0:0:{AEEB3CEF-2FEC-4B70-B904-BA3C6F734B8A}|VWheel\\VWheel.csproj|solutionrelative:vwheel\\mainform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form"
     }
   ],
   "DocumentGroupContainers": [
@@ -40,33 +40,35 @@
               "RelativeDocumentMoniker": "VWheel\\MainForm.cs",
               "ToolTip": "S:\\Otros\\PROYECTO-VOLANTE-VIRTUAL\\VWheel\\VWheel\\MainForm.cs",
               "RelativeToolTip": "VWheel\\MainForm.cs",
-              "ViewState": "AgIAACIAAAAAAAAAAAAcwCoAAAAzAAAAAAAAAA==",
+              "ViewState": "AgIAAPsBAAAAAAAAAAAAwAYCAAATAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-04-29T20:39:50.978Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 1,
               "Title": "MainForm.Designer.cs",
               "DocumentMoniker": "S:\\Otros\\PROYECTO-VOLANTE-VIRTUAL\\VWheel\\VWheel\\MainForm.Designer.cs",
               "RelativeDocumentMoniker": "VWheel\\MainForm.Designer.cs",
               "ToolTip": "S:\\Otros\\PROYECTO-VOLANTE-VIRTUAL\\VWheel\\VWheel\\MainForm.Designer.cs",
               "RelativeToolTip": "VWheel\\MainForm.Designer.cs",
-              "ViewState": "AgIAAEUAAAAAAAAAAAAqwE0AAAAZAAAAAAAAAA==",
+              "ViewState": "AgIAAFcAAAAAAAAAAADwv2EAAABAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-05-01T00:13:57.651Z"
+              "WhenOpened": "2026-05-01T00:13:57.651Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 2,
               "Title": "MainForm.cs [Dise\u00F1o]",
               "DocumentMoniker": "S:\\Otros\\PROYECTO-VOLANTE-VIRTUAL\\VWheel\\VWheel\\MainForm.cs",
               "RelativeDocumentMoniker": "VWheel\\MainForm.cs",
-              "ToolTip": "S:\\Otros\\PROYECTO VOLANTE VIRTUAL\\VWheel\\VWheel\\MainForm.cs [Dise\u00F1o]",
-              "RelativeToolTip": "..\\..\\PROYECTO VOLANTE VIRTUAL\\VWheel\\VWheel\\MainForm.cs [Dise\u00F1o]",
+              "ToolTip": "S:\\Otros\\PROYECTO-VOLANTE-VIRTUAL\\VWheel\\VWheel\\MainForm.cs [Dise\u00F1o]",
+              "RelativeToolTip": "VWheel\\MainForm.cs [Dise\u00F1o]",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-04-29T20:35:02.462Z"
+              "WhenOpened": "2026-04-29T20:35:02.462Z",
+              "EditorCaption": " [Dise\u00F1o]"
             }
           ]
         },
