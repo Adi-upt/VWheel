@@ -1,0 +1,12 @@
+S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\VWheel\bin\Debug\VWheel.exe.config
+S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\VWheel\bin\Debug\VWheel.exe
+S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\VWheel\bin\Debug\VWheel.pdb
+S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\VWheel\bin\Debug\vJoyInterfaceWrap.dll
+S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\VWheel\obj\Debug\VWheel.csproj.AssemblyReference.cache
+S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\VWheel\obj\Debug\VWheel.MainForm.resources
+S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\VWheel\obj\Debug\VWheel.Properties.Resources.resources
+S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\VWheel\obj\Debug\VWheel.csproj.GenerateResource.cache
+S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\VWheel\obj\Debug\VWheel.csproj.CoreCompileInputs.cache
+S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\VWheel\obj\Debug\VWheel.csproj.Up2Date
+S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\VWheel\obj\Debug\VWheel.exe
+S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\VWheel\obj\Debug\VWheel.pdb
