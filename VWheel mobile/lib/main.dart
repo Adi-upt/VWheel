@@ -133,6 +133,7 @@ class Tr {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Load saved language before starting the app
   final prefs = await SharedPreferences.getInstance();
   appLanguage.value = prefs.getString('vwheel_lang') ?? 'en';
 
@@ -799,6 +800,7 @@ class _EditorScreenState extends State<EditorScreen> {
   Widget _buildTelemetryUI(double width, double height, {bool isSelected = false}) {
     return Container(
       width: width, height: height,
+      clipBehavior: Clip.hardEdge, // SHIELD: Clips visual overflows without throwing errors
       decoration: BoxDecoration(
         color: const Color(0xFF111111),
         border: Border.all(color: isSelected ? Colors.greenAccent : Colors.grey.shade800, width: isSelected ? 3 : 2),
@@ -806,35 +808,37 @@ class _EditorScreenState extends State<EditorScreen> {
         boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 10, spreadRadius: 2)],
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: List.generate(15, (index) {
-                Color ledColor;
-                if (index < 5) {
-                  ledColor = Colors.greenAccent;
-                } else if (index < 10) {
-                  ledColor = Colors.redAccent;
-                } else {
-                  ledColor = Colors.blueAccent;
-                }
-                return Container(
-                  width: (width - 40) / 15, height: 14,
-                  decoration: BoxDecoration(color: ledColor.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(2)),
-                );
-              }),
+          // LEDs now take a percentage of the height, not fixed pixels
+          SizedBox(
+            height: height * 0.25,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.stretch, // Dynamic stretch
+                children: List.generate(15, (index) {
+                  Color ledColor;
+                  if (index < 5) {
+                    ledColor = Colors.greenAccent;
+                  } else if (index < 10) {
+                    ledColor = Colors.redAccent;
+                  } else {
+                    ledColor = Colors.blueAccent;
+                  }
+                  return Container(
+                    width: (width - 40) / 15,
+                    // Fixed height removed for adaptability
+                    decoration: BoxDecoration(color: ledColor.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(2)),
+                  );
+                }),
+              ),
             ),
-
           ),
-          const Spacer(),
-          const Text("N", style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Courier')),
-          const Spacer(),
+          // The 'N' takes the remaining space
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(bottom: 12.0, left: 10.0, right: 10.0),
+              padding: const EdgeInsets.all(8.0),
               child: FittedBox(
                 fit: BoxFit.contain,
                 child: const Text("N", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Courier')),
@@ -842,9 +846,7 @@ class _EditorScreenState extends State<EditorScreen> {
             ),
           ),
         ],
-
       ),
-
     );
   }
 }
@@ -866,7 +868,7 @@ class _PlayScreenState extends State<PlayScreen> {
   InternetAddress? pcAddress;
   final int port = 11000;
 
-  // --- VARIABLES SENSOR FUSION ---
+  // --- SENSOR FUSION VARIABLES ---
   StreamSubscription<AccelerometerEvent>? _accelSub;
   StreamSubscription<GyroscopeEvent>? _gyroSub;
   Timer? _networkTimer;
@@ -932,38 +934,38 @@ class _PlayScreenState extends State<PlayScreen> {
     }
   }
 
-  // --- MOTOR DE SENSORES Y HEARTBEAT A 100 Hz ---
+  // --- SENSOR ENGINE AND 100Hz HEARTBEAT ---
   void _startSensorsAndHeartbeat() {
-    // 1. Escuchar Acelerómetro (si es necesario)
+    // 1. Listen to Accelerometer (if needed)
     if (sensorMode == 0 || sensorMode == 2) {
       _accelSub = accelerometerEventStream().listen((AccelerometerEvent event) {
         accelAngle = (atan2(event.y, event.x) * (180 / pi)).clamp(-180.0, 180.0);
       });
     }
 
-    // 2. Escuchar Giroscopio (si es necesario)
+    // 2. Listen to Gyroscope (if needed)
     if (sensorMode == 1 || sensorMode == 2) {
       _gyroSub = gyroscopeEventStream().listen((GyroscopeEvent event) {
-        gyroRate = event.z * (180 / pi); // Grados por segundo
+        gyroRate = event.z * (180 / pi); // Degrees per second
       });
     }
 
-    // 3. Heartbeat de Red a 100Hz (10 milisegundos)
+    // 3. Network Heartbeat at 100Hz (10 milliseconds)
     _lastTime = DateTime.now();
     _networkTimer = Timer.periodic(const Duration(milliseconds: 10), (timer) {
       DateTime now = DateTime.now();
-      double dt = now.difference(_lastTime).inMicroseconds / 1000000.0; // Tiempo delta en segundos
+      double dt = now.difference(_lastTime).inMicroseconds / 1000000.0; // Delta time in seconds
       _lastTime = now;
 
       if (sensorMode == 0) {
-        // Solo Gravedad (Puede vibrar las manos)
+        // Gravity only (Prone to hand vibrations)
         currentAngle = accelAngle;
       } else if (sensorMode == 1) {
-        // Solo Giroscopio (Suave pero sufre drift)
+        // Gyroscope only (Smooth but prone to drift)
         currentAngle += gyroRate * dt;
         currentAngle = currentAngle.clamp(-180.0, 180.0);
       } else if (sensorMode == 2) {
-        // Fusión: Filtro Complementario (Suave y sin drift)
+        // Fusion: Complementary Filter (Smooth and drift-free)
         double alpha = 0.96;
         currentAngle = alpha * (currentAngle + gyroRate * dt) + (1.0 - alpha) * accelAngle;
         currentAngle = currentAngle.clamp(-180.0, 180.0);
@@ -1112,6 +1114,7 @@ class _PlayScreenState extends State<PlayScreen> {
   Widget _buildTelemetryUI(double width, double height) {
     return Container(
       width: width, height: height,
+      clipBehavior: Clip.hardEdge, // SHIELD: Clips visual overflows without throwing errors
       decoration: BoxDecoration(
         color: const Color(0xFF111111),
         border: Border.all(color: Colors.grey.shade800, width: 2),
@@ -1119,37 +1122,49 @@ class _PlayScreenState extends State<PlayScreen> {
         boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 10, spreadRadius: 2)],
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: List.generate(15, (index) {
-                Color ledColor;
-                if (index < 5) {
-                  ledColor = Colors.greenAccent;
-                } else if (index < 10) {
-                  ledColor = Colors.redAccent;
-                } else {
-                  ledColor = Colors.blueAccent;
-                }
+          // LEDs now take a percentage of the height, not fixed pixels
+          SizedBox(
+            height: height * 0.25,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.stretch, // Dynamic stretch
+                children: List.generate(15, (index) {
+                  Color ledColor;
+                  if (index < 5) {
+                    ledColor = Colors.greenAccent;
+                  } else if (index < 10) {
+                    ledColor = Colors.redAccent;
+                  } else {
+                    ledColor = Colors.blueAccent;
+                  }
 
-                bool isLit = index < 3;
-                return Container(
-                  width: (width - 40) / 15, height: 14,
-                  decoration: BoxDecoration(
-                    color: isLit ? ledColor : ledColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(2),
-                    boxShadow: isLit ? [BoxShadow(color: ledColor, blurRadius: 5, spreadRadius: 1)] : null,
-                  ),
-                );
-              }),
+                  bool isLit = index < 3; // Temporary logic to light up LEDs
+                  return Container(
+                    width: (width - 40) / 15,
+                    // Fixed height removed for adaptability
+                    decoration: BoxDecoration(
+                      color: isLit ? ledColor : ledColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(2),
+                      boxShadow: isLit ? [BoxShadow(color: ledColor, blurRadius: 5, spreadRadius: 1)] : null,
+                    ),
+                  );
+                }),
+              ),
             ),
           ),
-          const Spacer(),
-          const Text("N", style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Courier')),
-          const Spacer(),
+          // The 'N' takes the remaining space
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: FittedBox(
+                fit: BoxFit.contain,
+                child: const Text("N", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Courier')),
+              ),
+            ),
+          ),
         ],
       ),
     );

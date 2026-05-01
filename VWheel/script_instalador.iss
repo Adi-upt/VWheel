@@ -3,7 +3,7 @@
 ; Non-commercial use only
 
 #define MyAppName "VWheel"
-#define MyAppVersion "1.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "Adi Co."
 #define MyAppExeName "VWheel.exe"
 
@@ -13,24 +13,18 @@
 AppId={{5A3C43F8-B4E3-4A17-998B-CA799017F16E}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-;AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
-; "ArchitecturesAllowed=x64compatible" specifies that Setup cannot run
-; on anything but x64 and Windows 11 on Arm.
 ArchitecturesAllowed=x64compatible
-; "ArchitecturesInstallIn64BitMode=x64compatible" requests that the
-; install be done in "64-bit mode" on x64 or Windows 11 on Arm,
-; meaning it should use the native 64-bit Program Files directory and
-; the 64-bit view of the registry.
 ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
-; Remove the following line to run in administrative install mode (install for all users).
 PrivilegesRequired=admin
-OutputDir=S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel
-OutputBaseFilename=VWheel_Server_v1.0_Installer
-SetupIconFile=S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\logo.ico
+
+; El instalador final ahora se guardará directo en tu carpeta "Instaladores"
+OutputDir=S:\Otros\PROYECTO-VOLANTE-VIRTUAL\Instaladores
+OutputBaseFilename=VWheel_Server_v1.0.1_Installer
+SetupIconFile=S:\Otros\PROYECTO-VOLANTE-VIRTUAL\VWheel\logo.ico
 SolidCompression=yes
 WizardStyle=modern dynamic
 
@@ -42,18 +36,19 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\VWheel\bin\x64\Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\VWheel\bin\x64\Release\vJoyInterface.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\VWheel\bin\x64\Release\vJoyInterfaceWrap.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "S:\Otros\PROYECTO VOLANTE VIRTUAL\VWheel\VWheel\bin\x64\Release\VWheel.exe.config"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\ASUS\Downloads\vJoy-2.2.1.1\vJoySetup.exe"; DestDir: "{app}"; Flags: ignoreversion
-; NOTE: Don't use "Flags: ignoreversion" on any shared system files
+Source: "S:\Otros\PROYECTO-VOLANTE-VIRTUAL\VWheel\VWheel\bin\x64\Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "S:\Otros\PROYECTO-VOLANTE-VIRTUAL\VWheel\VWheel\bin\x64\Release\vJoyInterface.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "S:\Otros\PROYECTO-VOLANTE-VIRTUAL\VWheel\VWheel\bin\x64\Release\vJoyInterfaceWrap.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "S:\Otros\PROYECTO-VOLANTE-VIRTUAL\VWheel\VWheel\bin\x64\Release\VWheel.exe.config"; DestDir: "{app}"; Flags: ignoreversion
+
+; NUEVA RUTA DEL VJOY (Versión Brunner)
+Source: "S:\Otros\PROYECTO-VOLANTE-VIRTUAL\Instaladores\vJoySetup_v2.2.2.0_Win10_Win11.exe"; DestDir: "{app}"; Flags: ignoreversion deleteafterinstall
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\vJoySetup.exe"; Description: "Instalar el driver vJoy (Requerido para el Force Feedback)"; Flags: postinstall shellexec waituntilterminated
+; SE EJECUTA EL NUEVO NOMBRE DEL INSTALADOR DE VJOY
+Filename: "{app}\vJoySetup_v2.2.2.0_Win10_Win11.exe"; Description: "Install vJoy Driver (Required for Force Feedback)"; Flags: postinstall shellexec waituntilterminated
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
-
