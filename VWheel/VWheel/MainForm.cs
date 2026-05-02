@@ -16,6 +16,8 @@ namespace VWheel
     public partial class MainForm : Form
     {
         private UdpClient udpServer;
+        private UdpClient simHubListener; // NUEVO: Escucha a SimHub
+
         private bool isListening = false;
         private bool isBroadcasting = false;
 
@@ -134,29 +136,18 @@ namespace VWheel
 
         private void AutoConfigureVJoy()
         {
-            // If everything is perfectly configured (FFB active and 32 buttons), do nothing
             if (joystick.vJoyEnabled() && joystick.IsDeviceFfb(deviceId) && joystick.GetVJDButtonNumber(deviceId) >= 32) return;
 
             string vJoyConfGuiPath = @"C:\Program Files\vJoy\x64\vJoyConf.exe";
 
             if (File.Exists(vJoyConfGuiPath))
             {
-                MessageBox.Show(
-                    Tr.Get("setup_req_msg"),
-                    Tr.Get("setup_req_title"),
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                MessageBox.Show(Tr.Get("setup_req_msg"), Tr.Get("setup_req_title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
 
                 try
                 {
-                    ProcessStartInfo psi = new ProcessStartInfo
-                    {
-                        FileName = vJoyConfGuiPath,
-                        UseShellExecute = true
-                    };
+                    ProcessStartInfo psi = new ProcessStartInfo { FileName = vJoyConfGuiPath, UseShellExecute = true };
                     Process.Start(psi);
-
-                    // Temporarily exit the server so the user can configure vJoy safely
                     Environment.Exit(0);
                 }
                 catch { }
@@ -166,39 +157,10 @@ namespace VWheel
         private void CheckFFBSupport()
         {
             bool hasFFB = joystick.IsDeviceFfb(deviceId);
+            string msg = hasFFB ? "\r\n[SYSTEM] Force Feedback: ACTIVE ✅" : "\r\n[SYSTEM] ALERT: Driver does not report FFB. (Check vJoyConf)";
 
-            string msg = hasFFB
-                ? "\r\n[SYSTEM] Force Feedback: ACTIVE ✅"
-                : "\r\n[SYSTEM] ALERT: Driver does not report FFB. (Check vJoyConf)";
-
-            if (txtLog.InvokeRequired)
-                txtLog.Invoke(new Action(() => txtLog.AppendText(msg)));
-            else
-                txtLog.AppendText(msg);
-        }
-
-        private void ExecuteVJoyCommand(string path, string args)
-        {
-            ProcessStartInfo psi = new ProcessStartInfo
-            {
-                FileName = path,
-                Arguments = args,
-                Verb = "runas",
-                UseShellExecute = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            };
-
-            try
-            {
-                using (Process proc = Process.Start(psi))
-                {
-                    proc?.WaitForExit();
-                }
-            }
-            catch (System.ComponentModel.Win32Exception)
-            {
-                Invoke(new Action(() => txtLog.AppendText("\r\n[ERROR] Administrator permissions are required to enable FFB.")));
-            }
+            if (txtLog.InvokeRequired) txtLog.Invoke(new Action(() => txtLog.AppendText(msg)));
+            else txtLog.AppendText(msg);
         }
 
         private void StartServer()
@@ -214,20 +176,80 @@ namespace VWheel
             isListening = true;
             udpServer = new UdpClient(11000);
 
-            // Maximum priority thread for UDP
             Thread listenerThread = new Thread(ListenForUDP);
             listenerThread.IsBackground = true;
             listenerThread.Start();
 
+            // NUEVO: Iniciamos el puente de Telemetría
+            StartSimHubListener();
+
             StartBeacon();
             Task.Run(() => WatchdogTimeout());
 
-            if (txtLog.InvokeRequired)
-                txtLog.Invoke(new Action(() => { txtLog.Text = Tr.Get("waiting"); }));
-            else
-                txtLog.Text = Tr.Get("waiting");
+            if (txtLog.InvokeRequired) txtLog.Invoke(new Action(() => { txtLog.Text = Tr.Get("waiting"); }));
+            else txtLog.Text = Tr.Get("waiting");
 
             CheckFFBSupport();
+        }
+
+        // --- PUENTE DE TELEMETRÍA (SIMHUB a C# a MÓVIL) ---
+        private void StartSimHubListener()
+        {
+            try
+            {
+                simHubListener = new UdpClient(11003);
+                Thread simHubThread = new Thread(() =>
+                {
+                    IPEndPoint ep = new IPEndPoint(IPAddress.Any, 0);
+                    while (isListening)
+                    {
+                        try
+                        {
+                            byte[] data = simHubListener.Receive(ref ep);
+                            string msg = System.Text.Encoding.UTF8.GetString(data);
+                            string[] parts = msg.Split(';');
+
+                            // Esperamos: Marcha ; RPM_Actual ; RPM_Maximo
+                            if (parts.Length >= 3)
+                            {
+                                string gearStr = parts[0].Trim();
+                                float rpm = 0, maxRpm = 8000;
+
+                                float.TryParse(parts[1], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out rpm);
+                                float.TryParse(parts[2], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out maxRpm);
+
+                                if (maxRpm <= 0) maxRpm = 8000; // Si el juego no reporta el max, asumimos V8
+
+                                // Conversión de Marcha (SimHub manda N o R como texto)
+                                byte gearByte = 1;
+                                if (gearStr == "R") gearByte = 0;
+                                else if (gearStr == "N") gearByte = 1;
+                                else if (byte.TryParse(gearStr, out byte g)) gearByte = (byte)(g + 1);
+
+                                // Lógica de Shift Lights (Empiezan a prender al 40% de las RPM del coche real)
+                                float rpmPercent = rpm / maxRpm;
+                                byte leds = 0;
+                                if (rpmPercent > 0.4f)
+                                {
+                                    leds = (byte)Math.Min(15, ((rpmPercent - 0.4f) / 0.6f) * 15f);
+                                }
+                                if (rpmPercent >= 0.98f) leds = 15; // Shift Flash!
+
+                                // Disparo de telemetría a tu celular al instante
+                                if (lastPhoneEP != null && udpServer != null)
+                                {
+                                    byte[] telData = new byte[] { 2, gearByte, leds };
+                                    udpServer.SendAsync(telData, 3, new IPEndPoint(lastPhoneEP.Address, 11002));
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+                });
+                simHubThread.IsBackground = true;
+                simHubThread.Start();
+            }
+            catch { }
         }
 
         private void StartBeacon()
@@ -242,8 +264,7 @@ namespace VWheel
                     NetworkInterface[] interfaces = NetworkInterface.GetAllNetworkInterfaces();
                     foreach (NetworkInterface ni in interfaces)
                     {
-                        if (ni.OperationalStatus == OperationalStatus.Up &&
-                            ni.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                        if (ni.OperationalStatus == OperationalStatus.Up && ni.NetworkInterfaceType != NetworkInterfaceType.Loopback)
                         {
                             foreach (UnicastIPAddressInformation ip in ni.GetIPProperties().UnicastAddresses)
                             {
@@ -279,10 +300,7 @@ namespace VWheel
                     isVJoyAcquired = false;
                     lastPhoneEP = null;
 
-                    if (txtLog.InvokeRequired)
-                    {
-                        txtLog.Invoke(new Action(() => txtLog.Text = Tr.Get("disconnected")));
-                    }
+                    if (txtLog.InvokeRequired) txtLog.Invoke(new Action(() => txtLog.Text = Tr.Get("disconnected")));
                 }
                 await Task.Delay(1000);
             }
@@ -297,52 +315,39 @@ namespace VWheel
 
             byte[] buffer = new byte[14];
             EndPoint remoteEP = new IPEndPoint(IPAddress.Any, 0);
-
             Stopwatch uiThrottleTimer = Stopwatch.StartNew();
 
             while (isListening)
             {
                 try
                 {
-                    if (socket.Available >= 14)
+                    int bytesRead = socket.ReceiveFrom(buffer, ref remoteEP);
+
+                    while (socket.Available >= 14)
                     {
-                        // Flush the buffer to eliminate Jitter
-                        while (socket.Available > 14)
-                        {
-                            socket.ReceiveFrom(buffer, ref remoteEP);
-                        }
-
-                        int bytesRead = socket.ReceiveFrom(buffer, ref remoteEP);
-
-                        lastPacketTime = DateTime.Now;
-                        lastPhoneEP = remoteEP as IPEndPoint;
-
-                        if (bytesRead == 14)
-                        {
-                            if (!isVJoyAcquired)
-                            {
-                                AcquireVJoy();
-                            }
-
-                            float steeringAngle = BitConverter.ToSingle(buffer, 0);
-                            ushort throttle = BitConverter.ToUInt16(buffer, 4);
-                            ushort brake = BitConverter.ToUInt16(buffer, 6);
-                            ushort clutch = BitConverter.ToUInt16(buffer, 8);
-                            uint buttons = BitConverter.ToUInt32(buffer, 10);
-
-                            ProcessAxes(steeringAngle, throttle, brake, clutch, buttons);
-
-                            // Update UI every 50ms to prevent freezing Windows
-                            if (uiThrottleTimer.ElapsedMilliseconds > 50)
-                            {
-                                UpdateTelemetryUI(steeringAngle, throttle, brake, clutch, buttons);
-                                uiThrottleTimer.Restart();
-                            }
-                        }
+                        bytesRead = socket.ReceiveFrom(buffer, ref remoteEP);
                     }
-                    else
+
+                    lastPacketTime = DateTime.Now;
+                    lastPhoneEP = remoteEP as IPEndPoint;
+
+                    if (bytesRead == 14)
                     {
-                        Thread.Sleep(1);
+                        if (!isVJoyAcquired) AcquireVJoy();
+
+                        float steeringAngle = BitConverter.ToSingle(buffer, 0);
+                        ushort throttle = BitConverter.ToUInt16(buffer, 4);
+                        ushort brake = BitConverter.ToUInt16(buffer, 6);
+                        ushort clutch = BitConverter.ToUInt16(buffer, 8);
+                        uint buttons = BitConverter.ToUInt32(buffer, 10);
+
+                        ProcessAxes(steeringAngle, throttle, brake, clutch, buttons);
+
+                        if (uiThrottleTimer.ElapsedMilliseconds > 50)
+                        {
+                            UpdateTelemetryUI(steeringAngle, throttle, brake, clutch, buttons);
+                            uiThrottleTimer.Restart();
+                        }
                     }
                 }
                 catch (SocketException) { }
@@ -377,7 +382,6 @@ namespace VWheel
 
                 for (int i = 0; i < 32; i++)
                 {
-                    // 1U (Unsigned) fixes the issue with high button indexes
                     bool isPressed = (buttons & (1U << i)) != 0;
                     joystick.SetBtn(isPressed, deviceId, (uint)(i + 1));
                 }
@@ -386,15 +390,12 @@ namespace VWheel
 
         private void OnFFBEvent(IntPtr data, object userData)
         {
-            if (lastPhoneEP != null)
+            if (lastPhoneEP != null && udpServer != null)
             {
                 try
                 {
-                    using (UdpClient ffbSender = new UdpClient())
-                    {
-                        byte[] vibData = new byte[] { 1 };
-                        ffbSender.Send(vibData, 1, new IPEndPoint(lastPhoneEP.Address, 11002));
-                    }
+                    byte[] vibData = new byte[] { 1 };
+                    udpServer.SendAsync(vibData, 1, new IPEndPoint(lastPhoneEP.Address, 11002));
                 }
                 catch { }
             }
@@ -427,12 +428,10 @@ namespace VWheel
 
             isListening = false;
             isBroadcasting = false;
+            simHubListener?.Close();
             udpServer?.Close();
 
-            if (isVJoyAcquired)
-            {
-                joystick.RelinquishVJD(deviceId);
-            }
+            if (isVJoyAcquired) joystick.RelinquishVJD(deviceId);
 
             if (trayIcon != null)
             {
@@ -448,19 +447,8 @@ namespace VWheel
 
         private void lblAbout_Click(object sender, EventArgs e)
         {
-            try
-            {
-                ProcessStartInfo psi = new ProcessStartInfo
-                {
-                    FileName = "https://x.com/ItsAdi916",
-                    UseShellExecute = true
-                };
-                Process.Start(psi);
-            }
-            catch
-            {
-                MessageBox.Show(Tr.Get("browser_err"), Tr.Get("link_err"), MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
+            try { Process.Start(new ProcessStartInfo { FileName = "https://x.com/ItsAdi916", UseShellExecute = true }); }
+            catch { MessageBox.Show(Tr.Get("browser_err"), Tr.Get("link_err"), MessageBoxButtons.OK, MessageBoxIcon.Information); }
         }
 
         // --- TRANSLATION ENGINE ---
@@ -477,13 +465,13 @@ namespace VWheel
                     { "admin_req", "Administrator privileges are required to auto-configure vJoy." },
                     { "waiting", "=== SERVER STARTED ===\r\n\r\nWaiting for automatic mobile connection...\r\n(Auto-start enabled)" },
                     { "disconnected", "=== VWHEEL TELEMETRY ===\r\n\r\nMobile disconnected.\r\nvJoy successfully released.\r\nWaiting for reconnection..." },
-                    { "telemetry", "=== VWHEEL TELEMETRY ===" },
+                    { "telemetry", "=== VWHEEL INPUTS ===" },
                     { "steer", "Steering (X Axis): " },
                     { "accel", "Throttle (Y Axis): " },
                     { "brake", "Brake (Z Axis):    " },
                     { "clutch", "Clutch (Rx Axis):  " },
                     { "btns", "Buttons (32-bit):  " },
-                    { "about", "VWheel Server v1.0.0\nCreated by Adi\nFeedback & Support on X: @ItsAdi916" },
+                    { "about", "VWheel Server v1.0.2\nCreated by Adi\nFeedback & Support on X: @ItsAdi916" },
                     { "link_err", "Link Error" },
                     { "browser_err", "Could not open the browser. Find me on X as @ItsAdi916" },
                     { "exit_app", "Exit VWheel" },
@@ -501,14 +489,14 @@ namespace VWheel
                     { "perm_title", "Permisos Denegados" },
                     { "admin_req", "Se requieren permisos de administrador para auto-configurar vJoy." },
                     { "waiting", "=== SERVIDOR INICIADO ===\r\n\r\nEsperando conexión automática del celular...\r\n(Auto-arranque activado)" },
-                    { "disconnected", "=== TELEMETRÍA VWHEEL ===\r\n\r\nCelular desconectado.\r\nvJoy liberado exitosamente.\r\nEsperando reconexión..." },
-                    { "telemetry", "=== TELEMETRÍA VWHEEL ===" },
+                    { "disconnected", "=== INPUTS VWHEEL ===\r\n\r\nCelular desconectado.\r\nvJoy liberado exitosamente.\r\nEsperando reconexión..." },
+                    { "telemetry", "=== INPUTS VWHEEL ===" },
                     { "steer", "Dirección (Eje X): " },
                     { "accel", "Acelerador (Eje Y): " },
                     { "brake", "Freno (Eje Z):     " },
                     { "clutch", "Embrague (Eje Rx): " },
                     { "btns", "Botones (32 bits): " },
-                    { "about", "VWheel Server v1.0.0\nCreado por Adi\nFeedback y Soporte en X: @ItsAdi916" },
+                    { "about", "VWheel Server v1.0.2\nCreado por Adi\nFeedback y Soporte en X: @ItsAdi916" },
                     { "link_err", "Error de Enlace" },
                     { "browser_err", "No se pudo abrir el navegador. Búscame en X como @ItsAdi916" },
                     { "exit_app", "Salir de VWheel" },

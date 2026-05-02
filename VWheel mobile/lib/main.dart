@@ -9,10 +9,10 @@ import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// Global Language Controller
+// Controlador global para el idioma
 final ValueNotifier<String> appLanguage = ValueNotifier<String>('en');
 
-// Translation Engine
+// Motor de traducciones
 class Tr {
   static const Map<String, Map<String, String>> _strings = {
     'en': {
@@ -64,7 +64,7 @@ class Tr {
       'exit_msg': 'Are you sure you want to exit and stop transmitting?',
       'exit': 'Exit',
       'about': 'About VWheel',
-      'version': 'Version 1.0.0',
+      'version': 'Version 1.0.1',
       'created_by': 'Created by',
       'feedback': 'Feedback & Support',
       'close': 'Close',
@@ -118,7 +118,7 @@ class Tr {
       'exit_msg': '¿Estás seguro de que deseas salir y detener la transmisión?',
       'exit': 'Salir',
       'about': 'Acerca de VWheel',
-      'version': 'Versión 1.0.0',
+      'version': 'Versión 1.0.1',
       'created_by': 'Creado por',
       'feedback': 'Feedback y Soporte',
       'close': 'Cerrar',
@@ -133,7 +133,6 @@ class Tr {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load saved language before starting the app
   final prefs = await SharedPreferences.getInstance();
   appLanguage.value = prefs.getString('vwheel_lang') ?? 'en';
 
@@ -285,7 +284,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       DropdownMenuItem(value: 'es', child: Text("Español")),
                     ],
                     onChanged: (val) {
-                      if (val != null) setDialogState(() => tempLang = val);
+                      if (val != null) {
+                        setDialogState(() => tempLang = val);
+                      }
                     },
                   ),
                   const SizedBox(height: 15),
@@ -298,7 +299,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       DropdownMenuItem(value: 2, child: Text(Tr.get('sensor_fusion'))),
                     ],
                     onChanged: (val) {
-                      if (val != null) setDialogState(() => tempSensor = val);
+                      if (val != null) {
+                        setDialogState(() => tempSensor = val);
+                      }
                     },
                   ),
                   const SizedBox(height: 15),
@@ -797,10 +800,11 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
+  // EL EDITOR DEBE TENER LA TELEMETRÍA ESTÁTICA
   Widget _buildTelemetryUI(double width, double height, {bool isSelected = false}) {
     return Container(
       width: width, height: height,
-      clipBehavior: Clip.hardEdge, // SHIELD: Clips visual overflows without throwing errors
+      clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
         color: const Color(0xFF111111),
         border: Border.all(color: isSelected ? Colors.greenAccent : Colors.grey.shade800, width: isSelected ? 3 : 2),
@@ -809,14 +813,13 @@ class _EditorScreenState extends State<EditorScreen> {
       ),
       child: Column(
         children: [
-          // LEDs now take a percentage of the height, not fixed pixels
           SizedBox(
             height: height * 0.25,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.stretch, // Dynamic stretch
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: List.generate(15, (index) {
                   Color ledColor;
                   if (index < 5) {
@@ -826,16 +829,21 @@ class _EditorScreenState extends State<EditorScreen> {
                   } else {
                     ledColor = Colors.blueAccent;
                   }
+
+                  bool isLit = index < 3; // Estático para el editor
+
                   return Container(
                     width: (width - 40) / 15,
-                    // Fixed height removed for adaptability
-                    decoration: BoxDecoration(color: ledColor.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(2)),
+                    decoration: BoxDecoration(
+                      color: isLit ? ledColor : ledColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(2),
+                      boxShadow: isLit ? [BoxShadow(color: ledColor, blurRadius: 5, spreadRadius: 1)] : null,
+                    ),
                   );
                 }),
               ),
             ),
           ),
-          // The 'N' takes the remaining space
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(8.0),
@@ -863,15 +871,20 @@ class _PlayScreenState extends State<PlayScreen> {
   int activeSlot = 1;
   int sensorMode = 2;
 
+  // VARIABLES DINÁMICAS DE TELEMETRÍA (Solo existen aquí en el PlayScreen)
+  String currentGear = "N";
+  int ledsLit = 0;
+
   RawDatagramSocket? udpSocket;
   RawDatagramSocket? ffbSocket;
   InternetAddress? pcAddress;
   final int port = 11000;
 
-  // --- SENSOR FUSION VARIABLES ---
+  // --- REAL-TIME ENGINE VARIABLES ---
   StreamSubscription<AccelerometerEvent>? _accelSub;
   StreamSubscription<GyroscopeEvent>? _gyroSub;
-  Timer? _networkTimer;
+
+  final Stopwatch _networkThrottle = Stopwatch()..start();
   DateTime _lastTime = DateTime.now();
 
   double currentAngle = 0.0;
@@ -882,6 +895,13 @@ class _PlayScreenState extends State<PlayScreen> {
   int throttleVal = 0;
   int brakeVal = 0;
   int clutchVal = 0;
+
+  // --- LAST STATE MEMORY (Deadzone & Delta check) ---
+  double _lastSentAngle = 0.0;
+  int _lastSentButtons = 0;
+  int _lastSentThrottle = 0;
+  int _lastSentBrake = 0;
+  int _lastSentClutch = 0;
 
   Map<String, double> sliderVisualValues = {};
   Map<String, bool> buttonVisualStates = {};
@@ -910,7 +930,7 @@ class _PlayScreenState extends State<PlayScreen> {
       });
     }
 
-    _startSensorsAndHeartbeat();
+    _startSensors();
   }
 
   Future<void> _setupNetwork(String ip) async {
@@ -923,8 +943,30 @@ class _PlayScreenState extends State<PlayScreen> {
         if (event == RawSocketEvent.read) {
           Datagram? dg = ffbSocket!.receive();
           if (dg != null && dg.data.isNotEmpty) {
-            if (dg.data[0] == 1) {
+            int cmd = dg.data[0];
+
+            // CMD 1: Force Feedback (Vibración)
+            if (cmd == 1) {
               HapticFeedback.heavyImpact();
+            }
+            // CMD 2: Telemetría [Comando, Marcha, Luces LED]
+            else if (cmd == 2 && dg.data.length >= 3) {
+              int gearInt = dg.data[1];
+              int leds = dg.data[2];
+
+              String gearStr = "N";
+              if (gearInt == 0) {
+                gearStr = "R";
+              } else if (gearInt == 1) {
+                gearStr = "N";
+              } else {
+                gearStr = (gearInt - 1).toString();
+              }
+
+              setState(() {
+                currentGear = gearStr;
+                ledsLit = leds;
+              });
             }
           }
         }
@@ -934,45 +976,66 @@ class _PlayScreenState extends State<PlayScreen> {
     }
   }
 
-  // --- SENSOR ENGINE AND 100Hz HEARTBEAT ---
-  void _startSensorsAndHeartbeat() {
-    // 1. Listen to Accelerometer (if needed)
-    if (sensorMode == 0 || sensorMode == 2) {
-      _accelSub = accelerometerEventStream().listen((AccelerometerEvent event) {
-        accelAngle = (atan2(event.y, event.x) * (180 / pi)).clamp(-180.0, 180.0);
-      });
-    }
-
-    // 2. Listen to Gyroscope (if needed)
-    if (sensorMode == 1 || sensorMode == 2) {
-      _gyroSub = gyroscopeEventStream().listen((GyroscopeEvent event) {
-        gyroRate = event.z * (180 / pi); // Degrees per second
-      });
-    }
-
-    // 3. Network Heartbeat at 100Hz (10 milliseconds)
+  // --- SENSOR ENGINE (EVENT DRIVEN) ---
+  void _startSensors() {
     _lastTime = DateTime.now();
-    _networkTimer = Timer.periodic(const Duration(milliseconds: 10), (timer) {
-      DateTime now = DateTime.now();
-      double dt = now.difference(_lastTime).inMicroseconds / 1000000.0; // Delta time in seconds
-      _lastTime = now;
 
-      if (sensorMode == 0) {
-        // Gravity only (Prone to hand vibrations)
-        currentAngle = accelAngle;
-      } else if (sensorMode == 1) {
-        // Gyroscope only (Smooth but prone to drift)
-        currentAngle += gyroRate * dt;
-        currentAngle = currentAngle.clamp(-180.0, 180.0);
-      } else if (sensorMode == 2) {
-        // Fusion: Complementary Filter (Smooth and drift-free)
-        double alpha = 0.96;
-        currentAngle = alpha * (currentAngle + gyroRate * dt) + (1.0 - alpha) * accelAngle;
-        currentAngle = currentAngle.clamp(-180.0, 180.0);
+    const sampling = Duration(milliseconds: 10);
+
+    if (sensorMode == 0 || sensorMode == 2) {
+      _accelSub = accelerometerEventStream(samplingPeriod: sampling).listen((event) {
+        accelAngle = (atan2(event.y, event.x) * (180 / pi)).clamp(-180.0, 180.0);
+
+        if (sensorMode == 0) {
+          currentAngle = accelAngle;
+          _attemptSend();
+        }
+      });
+    }
+
+    if (sensorMode == 1 || sensorMode == 2) {
+      _gyroSub = gyroscopeEventStream(samplingPeriod: sampling).listen((event) {
+        DateTime now = DateTime.now();
+        double dt = now.difference(_lastTime).inMicroseconds / 1000000.0;
+        _lastTime = now;
+
+        gyroRate = event.z * (180 / pi);
+
+        if (sensorMode == 1) {
+          currentAngle += gyroRate * dt;
+          currentAngle = currentAngle.clamp(-180.0, 180.0);
+        } else if (sensorMode == 2) {
+          double alpha = 0.85;
+          currentAngle = alpha * (currentAngle + gyroRate * dt) + (1.0 - alpha) * accelAngle;
+          currentAngle = currentAngle.clamp(-180.0, 180.0);
+        }
+
+        _attemptSend();
+      });
+    }
+  }
+
+  // --- THE INTELLIGENT SEND ENGINE ---
+  void _attemptSend() {
+    bool angleChanged = (currentAngle - _lastSentAngle).abs() > 0.15;
+    bool buttonsChanged = buttonsState != _lastSentButtons;
+    bool pedalsChanged = throttleVal != _lastSentThrottle ||
+        brakeVal != _lastSentBrake ||
+        clutchVal != _lastSentClutch;
+
+    if (angleChanged || buttonsChanged || pedalsChanged) {
+      if (_networkThrottle.elapsedMilliseconds >= 4) {
+        _sendUdpPacket();
+
+        _lastSentAngle = currentAngle;
+        _lastSentButtons = buttonsState;
+        _lastSentThrottle = throttleVal;
+        _lastSentBrake = brakeVal;
+        _lastSentClutch = clutchVal;
+
+        _networkThrottle.reset();
       }
-
-      _sendUdpPacket();
-    });
+    }
   }
 
   void _sendUdpPacket() {
@@ -994,18 +1057,19 @@ class _PlayScreenState extends State<PlayScreen> {
       } else {
         buttonsState &= ~(1 << el.bindIndex);
       }
+      _attemptSend();
     }
   }
 
   void _handleSliderUpdate(VWheelElement el, Offset localPosition) {
-    double percent = 1.0 - (localPosition.dy / el.height);
-    percent = percent.clamp(0.0, 1.0);
+    double percent = (1.0 - (localPosition.dy / el.height)).clamp(0.0, 1.0);
     setState(() => sliderVisualValues[el.id] = percent);
 
     int val = (percent * 32767).toInt();
     if (el.bindIndex == 100) { throttleVal = val; }
     if (el.bindIndex == 101) { brakeVal = val; }
     if (el.bindIndex == 102) { clutchVal = val; }
+    _attemptSend();
   }
 
   void _handleSliderRelease(VWheelElement el) {
@@ -1013,11 +1077,11 @@ class _PlayScreenState extends State<PlayScreen> {
     if (el.bindIndex == 100) { throttleVal = 0; }
     if (el.bindIndex == 101) { brakeVal = 0; }
     if (el.bindIndex == 102) { clutchVal = 0; }
+    _attemptSend();
   }
 
   @override
   void dispose() {
-    _networkTimer?.cancel();
     _accelSub?.cancel();
     _gyroSub?.cancel();
     udpSocket?.close();
@@ -1110,11 +1174,11 @@ class _PlayScreenState extends State<PlayScreen> {
     );
   }
 
-  // Visual Telemetry UI in Play Mode
+  // EL PLAYSCREEN DEBE TENER LA TELEMETRÍA DINÁMICA
   Widget _buildTelemetryUI(double width, double height) {
     return Container(
       width: width, height: height,
-      clipBehavior: Clip.hardEdge, // SHIELD: Clips visual overflows without throwing errors
+      clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
         color: const Color(0xFF111111),
         border: Border.all(color: Colors.grey.shade800, width: 2),
@@ -1123,14 +1187,13 @@ class _PlayScreenState extends State<PlayScreen> {
       ),
       child: Column(
         children: [
-          // LEDs now take a percentage of the height, not fixed pixels
           SizedBox(
             height: height * 0.25,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.stretch, // Dynamic stretch
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: List.generate(15, (index) {
                   Color ledColor;
                   if (index < 5) {
@@ -1141,10 +1204,11 @@ class _PlayScreenState extends State<PlayScreen> {
                     ledColor = Colors.blueAccent;
                   }
 
-                  bool isLit = index < 3; // Temporary logic to light up LEDs
+                  // MAGIA DINÁMICA
+                  bool isLit = index < ledsLit;
+
                   return Container(
                     width: (width - 40) / 15,
-                    // Fixed height removed for adaptability
                     decoration: BoxDecoration(
                       color: isLit ? ledColor : ledColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(2),
@@ -1155,13 +1219,13 @@ class _PlayScreenState extends State<PlayScreen> {
               ),
             ),
           ),
-          // The 'N' takes the remaining space
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(8.0),
               child: FittedBox(
                 fit: BoxFit.contain,
-                child: const Text("N", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Courier')),
+                // MAGIA DINÁMICA
+                child: Text(currentGear, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Courier')),
               ),
             ),
           ),
