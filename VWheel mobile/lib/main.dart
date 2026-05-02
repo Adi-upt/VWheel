@@ -64,7 +64,7 @@ class Tr {
       'exit_msg': 'Are you sure you want to exit and stop transmitting?',
       'exit': 'Exit',
       'about': 'About VWheel',
-      'version': 'Version 1.0.1',
+      'version': 'Version 1.0.2',
       'created_by': 'Created by',
       'feedback': 'Feedback & Support',
       'close': 'Close',
@@ -118,7 +118,7 @@ class Tr {
       'exit_msg': '¿Estás seguro de que deseas salir y detener la transmisión?',
       'exit': 'Salir',
       'about': 'Acerca de VWheel',
-      'version': 'Versión 1.0.1',
+      'version': 'Versión 1.0.2',
       'created_by': 'Creado por',
       'feedback': 'Feedback y Soporte',
       'close': 'Cerrar',
@@ -192,6 +192,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     super.initState();
     targetIp = Tr.get('searching');
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    // Restaurar UI estándar en el menú principal
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _loadSettings();
     _startDiscovery();
   }
@@ -531,6 +533,8 @@ class _EditorScreenState extends State<EditorScreen> {
   void initState() {
     super.initState();
     SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
+    // OCULTAR BARRA DE NOTIFICACIONES AL ENTRAR (MODO INMERSIVO)
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _loadLayout();
   }
 
@@ -616,90 +620,103 @@ class _EditorScreenState extends State<EditorScreen> {
   Widget _buildPropertiesPanel() {
     if (selectedElement == null) return const SizedBox.shrink();
 
-    return Container(
-      width: 320,
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E).withValues(alpha: 0.95),
-        border: const Border(left: BorderSide(color: Colors.greenAccent, width: 2)),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(Tr.get('properties'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
-              IconButton(icon: const Icon(Icons.close, color: Colors.white70), onPressed: () => setState(() => selectedElement = null)),
-            ],
+    // LÓGICA DE POSICIONAMIENTO DINÁMICO DEL PANEL
+    // Si el elemento está en la derecha, el panel va a la izquierda.
+    bool panelAtRight = selectedElement!.x < MediaQuery.of(context).size.width / 2;
+
+    return Positioned(
+      left: panelAtRight ? null : 0,
+      right: panelAtRight ? 0 : null,
+      top: 0,
+      bottom: 0,
+      child: Container(
+        width: 320,
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E1E1E).withValues(alpha: 0.95),
+          border: Border(
+            left: panelAtRight ? const BorderSide(color: Colors.greenAccent, width: 2) : BorderSide.none,
+            right: !panelAtRight ? const BorderSide(color: Colors.greenAccent, width: 2) : BorderSide.none,
           ),
-          const Divider(color: Colors.white24),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (selectedElement!.type != 'telemetry')
-                    TextFormField(
-                      key: ValueKey('txt_${selectedElement!.id}'),
-                      initialValue: selectedElement!.text,
-                      decoration: InputDecoration(labelText: Tr.get('display_text')),
-                      onChanged: (val) => setState(() => selectedElement!.text = val),
-                    ),
-                  const SizedBox(height: 15),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey, padding: const EdgeInsets.symmetric(horizontal: 10)),
-                        icon: const Icon(Icons.copy, size: 16, color: Colors.white),
-                        label: Text(Tr.get('copy_size'), style: const TextStyle(fontSize: 12, color: Colors.white)),
-                        onPressed: () {
-                          copiedWidth = selectedElement!.width; copiedHeight = selectedElement!.height;
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Tr.get('dim_copied')), duration: const Duration(seconds: 1)));
-                        },
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(Tr.get('properties'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                IconButton(icon: const Icon(Icons.close, color: Colors.white70), onPressed: () => setState(() => selectedElement = null)),
+              ],
+            ),
+            const Divider(color: Colors.white24),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (selectedElement!.type != 'telemetry')
+                      TextFormField(
+                        key: ValueKey('txt_${selectedElement!.id}'),
+                        initialValue: selectedElement!.text,
+                        decoration: InputDecoration(labelText: Tr.get('display_text')),
+                        onChanged: (val) => setState(() => selectedElement!.text = val),
                       ),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(backgroundColor: (copiedWidth != null) ? Colors.green[700] : Colors.grey[800], padding: const EdgeInsets.symmetric(horizontal: 10)),
-                        icon: const Icon(Icons.paste, size: 16, color: Colors.white),
-                        label: Text(Tr.get('paste'), style: const TextStyle(fontSize: 12, color: Colors.white)),
-                        onPressed: (copiedWidth != null && copiedHeight != null) ? () {
-                          setState(() { selectedElement!.width = copiedWidth!; selectedElement!.height = copiedHeight!; });
-                        } : null,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  _buildPanelSlider(Tr.get('width'), selectedElement!.width, 20, 600, (v) => selectedElement!.width = v),
-                  _buildPanelSlider(Tr.get('height'), selectedElement!.height, 20, 600, (v) => selectedElement!.height = v),
-                  _buildPanelSlider(Tr.get('pos_x'), selectedElement!.x, 0, 1000, (v) => selectedElement!.x = v),
-                  _buildPanelSlider(Tr.get('pos_y'), selectedElement!.y, 0, 600, (v) => selectedElement!.y = v),
-                  const SizedBox(height: 10),
-                  if (selectedElement!.type == 'button' || selectedElement!.type == 'slider')
-                    DropdownButtonFormField<int>(
-                      key: ValueKey(selectedElement!.id),
-                      decoration: InputDecoration(labelText: Tr.get('mapping')),
-                      initialValue: selectedElement!.bindIndex,
-                      items: List.generate(32, (i) => DropdownMenuItem(value: i, child: Text("${Tr.get('vjoy_btn')}${i + 1}")))
-                        ..addAll([
-                          DropdownMenuItem(value: 100, child: Text(Tr.get('y_axis'))),
-                          DropdownMenuItem(value: 101, child: Text(Tr.get('z_axis'))),
-                          DropdownMenuItem(value: 102, child: Text(Tr.get('rx_axis'))),
-                        ]),
-                      onChanged: (v) => setState(() => selectedElement!.bindIndex = v ?? 0),
+                    const SizedBox(height: 15),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey, padding: const EdgeInsets.symmetric(horizontal: 10)),
+                          icon: const Icon(Icons.copy, size: 16, color: Colors.white),
+                          label: Text(Tr.get('copy_size'), style: const TextStyle(fontSize: 12, color: Colors.white)),
+                          onPressed: () {
+                            copiedWidth = selectedElement!.width; copiedHeight = selectedElement!.height;
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Tr.get('dim_copied')), duration: const Duration(seconds: 1)));
+                          },
+                        ),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(backgroundColor: (copiedWidth != null) ? Colors.green[700] : Colors.grey[800], padding: const EdgeInsets.symmetric(horizontal: 10)),
+                          icon: const Icon(Icons.paste, size: 16, color: Colors.white),
+                          label: Text(Tr.get('paste'), style: const TextStyle(fontSize: 12, color: Colors.white)),
+                          onPressed: (copiedWidth != null && copiedHeight != null) ? () {
+                            setState(() { selectedElement!.width = copiedWidth!; selectedElement!.height = copiedHeight!; });
+                          } : null,
+                        ),
+                      ],
                     ),
-                  const SizedBox(height: 25),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red[800], padding: const EdgeInsets.symmetric(vertical: 12)),
-                    icon: const Icon(Icons.delete_forever, color: Colors.white),
-                    label: Text(Tr.get('delete'), style: const TextStyle(color: Colors.white)),
-                    onPressed: () { setState(() { uiElements.remove(selectedElement); selectedElement = null; }); },
-                  )
-                ],
+                    const SizedBox(height: 10),
+                    _buildPanelSlider(Tr.get('width'), selectedElement!.width, 20, 600, (v) => selectedElement!.width = v),
+                    _buildPanelSlider(Tr.get('height'), selectedElement!.height, 20, 600, (v) => selectedElement!.height = v),
+                    _buildPanelSlider(Tr.get('pos_x'), selectedElement!.x, 0, 1000, (v) => selectedElement!.x = v),
+                    _buildPanelSlider(Tr.get('pos_y'), selectedElement!.y, 0, 600, (v) => selectedElement!.y = v),
+                    const SizedBox(height: 10),
+                    if (selectedElement!.type == 'button' || selectedElement!.type == 'slider')
+                      DropdownButtonFormField<int>(
+                        key: ValueKey(selectedElement!.id),
+                        decoration: InputDecoration(labelText: Tr.get('mapping')),
+                        initialValue: selectedElement!.bindIndex,
+                        items: List.generate(32, (i) => DropdownMenuItem(value: i, child: Text("${Tr.get('vjoy_btn')}${i + 1}")))
+                          ..addAll([
+                            DropdownMenuItem(value: 100, child: Text(Tr.get('y_axis'))),
+                            DropdownMenuItem(value: 101, child: Text(Tr.get('z_axis'))),
+                            DropdownMenuItem(value: 102, child: Text(Tr.get('rx_axis'))),
+                          ]),
+                        onChanged: (v) => setState(() => selectedElement!.bindIndex = v ?? 0),
+                      ),
+                    const SizedBox(height: 25),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red[800], padding: const EdgeInsets.symmetric(vertical: 12)),
+                      icon: const Icon(Icons.delete_forever, color: Colors.white),
+                      label: Text(Tr.get('delete'), style: const TextStyle(color: Colors.white)),
+                      onPressed: () { setState(() { uiElements.remove(selectedElement); selectedElement = null; }); },
+                    )
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -747,7 +764,11 @@ class _EditorScreenState extends State<EditorScreen> {
               left: 20, top: 20,
               child: Row(
                 children: [
-                  IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30), onPressed: () { SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]); Navigator.pop(context); }),
+                  IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30), onPressed: () {
+                    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+                    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); // Restaurar UI al salir
+                    Navigator.pop(context);
+                  }),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
@@ -767,8 +788,8 @@ class _EditorScreenState extends State<EditorScreen> {
               ],
             ),
           ),
-          if (selectedElement != null)
-            Positioned(right: 0, top: 0, bottom: 0, child: _buildPropertiesPanel()),
+          // LLAMADA AL PANEL DINÁMICO
+          _buildPropertiesPanel(),
         ],
       ),
     );
@@ -910,6 +931,8 @@ class _PlayScreenState extends State<PlayScreen> {
   void initState() {
     super.initState();
     SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
+    // OCULTAR BARRA DE NOTIFICACIONES AL CONDUCIR
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _loadLayoutAndSettings();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1114,6 +1137,7 @@ class _PlayScreenState extends State<PlayScreen> {
         final bool shouldPop = await _showExitConfirmationDialog();
         if (shouldPop && context.mounted) {
           SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+          SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); // Restaurar UI al salir
           Navigator.of(context).pop();
         }
       },
