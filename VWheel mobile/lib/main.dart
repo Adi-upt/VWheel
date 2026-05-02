@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:vibration/vibration.dart';
 
 // Controlador global para el idioma
 final ValueNotifier<String> appLanguage = ValueNotifier<String>('en');
@@ -36,7 +37,6 @@ class Tr {
       'sensor_fusion': 'Fusion (Recommended)',
       'button': 'Button',
       'pedal': 'Pedal',
-      'telemetry': 'Telemetry',
       'editing_slot': 'Editing Slot ',
       'import_json': 'Import JSON',
       'export_clip': 'Export to Clipboard',
@@ -64,7 +64,7 @@ class Tr {
       'exit_msg': 'Are you sure you want to exit and stop transmitting?',
       'exit': 'Exit',
       'about': 'About VWheel',
-      'version': 'Version 1.0.2',
+      'version': 'Version 1.0.4',
       'created_by': 'Created by',
       'feedback': 'Feedback & Support',
       'close': 'Close',
@@ -90,7 +90,6 @@ class Tr {
       'sensor_fusion': 'Fusión (Recomendado)',
       'button': 'Botón',
       'pedal': 'Pedal',
-      'telemetry': 'Telemetría',
       'editing_slot': 'Editando Slot ',
       'import_json': 'Importar JSON',
       'export_clip': 'Exportar a Portapapeles',
@@ -118,7 +117,7 @@ class Tr {
       'exit_msg': '¿Estás seguro de que deseas salir y detener la transmisión?',
       'exit': 'Salir',
       'about': 'Acerca de VWheel',
-      'version': 'Versión 1.0.2',
+      'version': 'Versión 1.0.4',
       'created_by': 'Creado por',
       'feedback': 'Feedback y Soporte',
       'close': 'Cerrar',
@@ -192,7 +191,6 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     super.initState();
     targetIp = Tr.get('searching');
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-    // Restaurar UI estándar en el menú principal
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _loadSettings();
     _startDiscovery();
@@ -236,7 +234,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
 
   Future<void> _startDiscovery() async {
     try {
-      discoverySocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 11001, reuseAddress: true, reusePort: true);
+      discoverySocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 11001, reuseAddress: true);
       discoverySocket!.broadcastEnabled = true;
       discoverySocket!.listen((RawSocketEvent event) {
         if (event == RawSocketEvent.read && !isUsbMode) {
@@ -389,7 +387,6 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
     bool isReady = targetIp != Tr.get('searching');
@@ -411,76 +408,78 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         ],
       ),
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Icon(
-                isUsbMode ? Icons.usb : (isReady ? Icons.wifi : Icons.wifi_find),
-                size: 64,
-                color: isReady ? Colors.greenAccent : Colors.white54,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                isUsbMode ? Tr.get('usb_enabled') : "${Tr.get('target')}$targetIp",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: isReady ? Colors.greenAccent : Colors.white54,
-                    fontSize: 16,
-                    fontWeight: isReady ? FontWeight.bold : FontWeight.normal
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Icon(
+                  isUsbMode ? Icons.usb : (isReady ? Icons.wifi : Icons.wifi_find),
+                  size: 64,
+                  color: isReady ? Colors.greenAccent : Colors.white54,
                 ),
-              ),
-              const SizedBox(height: 40),
-
-              Text(Tr.get('selected_layout'), textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54)),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(4, (index) {
-                  int slot = index + 1;
-                  bool isSelected = activeSlot == slot;
-                  return GestureDetector(
-                    onTap: () => _changeSlot(slot),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 5),
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                      decoration: BoxDecoration(
-                          color: isSelected ? Colors.green[800] : Colors.transparent,
-                          border: Border.all(color: isSelected ? Colors.greenAccent : Colors.white24),
-                          borderRadius: BorderRadius.circular(8)
-                      ),
-                      child: Text("S$slot", style: TextStyle(color: isSelected ? Colors.white : Colors.white54, fontWeight: FontWeight.bold)),
-                    ),
-                  );
-                }),
-              ),
-              const SizedBox(height: 30),
-
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  backgroundColor: isReady ? Colors.green[800] : Colors.transparent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: BorderSide(color: isReady ? Colors.greenAccent : Colors.white24, width: 2),
+                const SizedBox(height: 16),
+                Text(
+                  isUsbMode ? Tr.get('usb_enabled') : "${Tr.get('target')}$targetIp",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: isReady ? Colors.greenAccent : Colors.white54,
+                      fontSize: 16,
+                      fontWeight: isReady ? FontWeight.bold : FontWeight.normal
                   ),
                 ),
-                onPressed: isReady ? () => Navigator.pushNamed(context, '/play', arguments: targetIp) : null,
-                child: Text(Tr.get('start'), style: TextStyle(fontSize: 18, color: isReady ? Colors.white : Colors.white24, letterSpacing: 2)),
-              ),
-              const SizedBox(height: 20),
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  side: const BorderSide(color: Colors.white54, width: 1),
+                const SizedBox(height: 40),
+
+                Text(Tr.get('selected_layout'), textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54)),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(4, (index) {
+                    int slot = index + 1;
+                    bool isSelected = activeSlot == slot;
+                    return GestureDetector(
+                      onTap: () => _changeSlot(slot),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 5),
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                        decoration: BoxDecoration(
+                            color: isSelected ? Colors.green[800] : Colors.transparent,
+                            border: Border.all(color: isSelected ? Colors.greenAccent : Colors.white24),
+                            borderRadius: BorderRadius.circular(8)
+                        ),
+                        child: Text("S$slot", style: TextStyle(color: isSelected ? Colors.white : Colors.white54, fontWeight: FontWeight.bold)),
+                      ),
+                    );
+                  }),
                 ),
-                onPressed: () => Navigator.pushNamed(context, '/editor'),
-                child: Text(Tr.get('edit'), style: const TextStyle(fontSize: 18, color: Colors.white)),
-              ),
-            ],
+                const SizedBox(height: 30),
+
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    backgroundColor: isReady ? Colors.green[800] : Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: isReady ? Colors.greenAccent : Colors.white24, width: 2),
+                    ),
+                  ),
+                  onPressed: isReady ? () => Navigator.pushNamed(context, '/play', arguments: targetIp) : null,
+                  child: Text(Tr.get('start'), style: TextStyle(fontSize: 18, color: isReady ? Colors.white : Colors.white24, letterSpacing: 2)),
+                ),
+                const SizedBox(height: 20),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    side: const BorderSide(color: Colors.white54, width: 1),
+                  ),
+                  onPressed: () => Navigator.pushNamed(context, '/editor'),
+                  child: Text(Tr.get('edit'), style: const TextStyle(fontSize: 18, color: Colors.white)),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -533,7 +532,6 @@ class _EditorScreenState extends State<EditorScreen> {
   void initState() {
     super.initState();
     SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
-    // OCULTAR BARRA DE NOTIFICACIONES AL ENTRAR (MODO INMERSIVO)
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _loadLayout();
   }
@@ -608,8 +606,8 @@ class _EditorScreenState extends State<EditorScreen> {
       var newElement = VWheelElement(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         type: type, x: 200, y: 100,
-        width: type == 'telemetry' ? 240 : 80,
-        height: type == 'telemetry' ? 120 : (type == 'slider' ? 200 : 80),
+        width: 80,
+        height: type == 'slider' ? 200 : 80,
         text: type == 'button' ? "BTN" : "",
       );
       uiElements.add(newElement);
@@ -620,8 +618,6 @@ class _EditorScreenState extends State<EditorScreen> {
   Widget _buildPropertiesPanel() {
     if (selectedElement == null) return const SizedBox.shrink();
 
-    // LÓGICA DE POSICIONAMIENTO DINÁMICO DEL PANEL
-    // Si el elemento está en la derecha, el panel va a la izquierda.
     bool panelAtRight = selectedElement!.x < MediaQuery.of(context).size.width / 2;
 
     return Positioned(
@@ -655,13 +651,12 @@ class _EditorScreenState extends State<EditorScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (selectedElement!.type != 'telemetry')
-                      TextFormField(
-                        key: ValueKey('txt_${selectedElement!.id}'),
-                        initialValue: selectedElement!.text,
-                        decoration: InputDecoration(labelText: Tr.get('display_text')),
-                        onChanged: (val) => setState(() => selectedElement!.text = val),
-                      ),
+                    TextFormField(
+                      key: ValueKey('txt_${selectedElement!.id}'),
+                      initialValue: selectedElement!.text,
+                      decoration: InputDecoration(labelText: Tr.get('display_text')),
+                      onChanged: (val) => setState(() => selectedElement!.text = val),
+                    ),
                     const SizedBox(height: 15),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -691,19 +686,18 @@ class _EditorScreenState extends State<EditorScreen> {
                     _buildPanelSlider(Tr.get('pos_x'), selectedElement!.x, 0, 1000, (v) => selectedElement!.x = v),
                     _buildPanelSlider(Tr.get('pos_y'), selectedElement!.y, 0, 600, (v) => selectedElement!.y = v),
                     const SizedBox(height: 10),
-                    if (selectedElement!.type == 'button' || selectedElement!.type == 'slider')
-                      DropdownButtonFormField<int>(
-                        key: ValueKey(selectedElement!.id),
-                        decoration: InputDecoration(labelText: Tr.get('mapping')),
-                        initialValue: selectedElement!.bindIndex,
-                        items: List.generate(32, (i) => DropdownMenuItem(value: i, child: Text("${Tr.get('vjoy_btn')}${i + 1}")))
-                          ..addAll([
-                            DropdownMenuItem(value: 100, child: Text(Tr.get('y_axis'))),
-                            DropdownMenuItem(value: 101, child: Text(Tr.get('z_axis'))),
-                            DropdownMenuItem(value: 102, child: Text(Tr.get('rx_axis'))),
-                          ]),
-                        onChanged: (v) => setState(() => selectedElement!.bindIndex = v ?? 0),
-                      ),
+                    DropdownButtonFormField<int>(
+                      key: ValueKey(selectedElement!.id),
+                      decoration: InputDecoration(labelText: Tr.get('mapping')),
+                      initialValue: selectedElement!.bindIndex,
+                      items: List.generate(32, (i) => DropdownMenuItem(value: i, child: Text("${Tr.get('vjoy_btn')}${i + 1}")))
+                        ..addAll([
+                          DropdownMenuItem(value: 100, child: Text(Tr.get('y_axis'))),
+                          DropdownMenuItem(value: 101, child: Text(Tr.get('z_axis'))),
+                          DropdownMenuItem(value: 102, child: Text(Tr.get('rx_axis'))),
+                        ]),
+                      onChanged: (v) => setState(() => selectedElement!.bindIndex = v ?? 0),
+                    ),
                     const SizedBox(height: 25),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.red[800], padding: const EdgeInsets.symmetric(vertical: 12)),
@@ -742,8 +736,6 @@ class _EditorScreenState extends State<EditorScreen> {
           FloatingActionButton.extended(heroTag: "b1", onPressed: () => _addElement('button'), icon: const Icon(Icons.crop_square), label: Text(Tr.get('button'))),
           const SizedBox(height: 8),
           FloatingActionButton.extended(heroTag: "b2", onPressed: () => _addElement('slider'), icon: const Icon(Icons.tune), label: Text(Tr.get('pedal'))),
-          const SizedBox(height: 8),
-          FloatingActionButton.extended(heroTag: "b3", onPressed: () => _addElement('telemetry'), icon: const Icon(Icons.speed), label: Text(Tr.get('telemetry'))),
         ],
       ),
       body: Stack(
@@ -766,7 +758,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 children: [
                   IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30), onPressed: () {
                     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-                    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); // Restaurar UI al salir
+                    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
                     Navigator.pop(context);
                   }),
                   Container(
@@ -788,7 +780,6 @@ class _EditorScreenState extends State<EditorScreen> {
               ],
             ),
           ),
-          // LLAMADA AL PANEL DINÁMICO
           _buildPropertiesPanel(),
         ],
       ),
@@ -796,10 +787,6 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _buildWireframeElement(VWheelElement el, {bool isSelected = false}) {
-    if (el.type == 'telemetry') {
-      return _buildTelemetryUI(el.width, el.height, isSelected: isSelected);
-    }
-
     return Container(
       width: el.width, height: el.height,
       decoration: BoxDecoration(
@@ -820,64 +807,6 @@ class _EditorScreenState extends State<EditorScreen> {
       ),
     );
   }
-
-  // EL EDITOR DEBE TENER LA TELEMETRÍA ESTÁTICA
-  Widget _buildTelemetryUI(double width, double height, {bool isSelected = false}) {
-    return Container(
-      width: width, height: height,
-      clipBehavior: Clip.hardEdge,
-      decoration: BoxDecoration(
-        color: const Color(0xFF111111),
-        border: Border.all(color: isSelected ? Colors.greenAccent : Colors.grey.shade800, width: isSelected ? 3 : 2),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 10, spreadRadius: 2)],
-      ),
-      child: Column(
-        children: [
-          SizedBox(
-            height: height * 0.25,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: List.generate(15, (index) {
-                  Color ledColor;
-                  if (index < 5) {
-                    ledColor = Colors.greenAccent;
-                  } else if (index < 10) {
-                    ledColor = Colors.redAccent;
-                  } else {
-                    ledColor = Colors.blueAccent;
-                  }
-
-                  bool isLit = index < 3; // Estático para el editor
-
-                  return Container(
-                    width: (width - 40) / 15,
-                    decoration: BoxDecoration(
-                      color: isLit ? ledColor : ledColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(2),
-                      boxShadow: isLit ? [BoxShadow(color: ledColor, blurRadius: 5, spreadRadius: 1)] : null,
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: FittedBox(
-                fit: BoxFit.contain,
-                child: const Text("N", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Courier')),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // --- SCREEN 2: PLAY (REAL DRIVING) ---
@@ -892,14 +821,14 @@ class _PlayScreenState extends State<PlayScreen> {
   int activeSlot = 1;
   int sensorMode = 2;
 
-  // VARIABLES DINÁMICAS DE TELEMETRÍA (Solo existen aquí en el PlayScreen)
-  String currentGear = "N";
-  int ledsLit = 0;
-
   RawDatagramSocket? udpSocket;
   RawDatagramSocket? ffbSocket;
   InternetAddress? pcAddress;
   final int port = 11000;
+
+  // --- MOTOR FORCE FEEDBACK OPTIMIZADO ---
+  bool _hasCustomVibration = false;
+  int _lastVibrationTime = 0;
 
   // --- REAL-TIME ENGINE VARIABLES ---
   StreamSubscription<AccelerometerEvent>? _accelSub;
@@ -931,7 +860,6 @@ class _PlayScreenState extends State<PlayScreen> {
   void initState() {
     super.initState();
     SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
-    // OCULTAR BARRA DE NOTIFICACIONES AL CONDUCIR
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _loadLayoutAndSettings();
 
@@ -953,6 +881,12 @@ class _PlayScreenState extends State<PlayScreen> {
       });
     }
 
+    // CACHEO DE HARDWARE (Crucial para el rendimiento del FFB)
+    bool support = await Vibration.hasCustomVibrationsSupport();
+    setState(() {
+      _hasCustomVibration = support;
+    });
+
     _startSensors();
   }
 
@@ -961,35 +895,54 @@ class _PlayScreenState extends State<PlayScreen> {
       pcAddress = InternetAddress(ip);
       udpSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
 
-      ffbSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 11002, reuseAddress: true, reusePort: true);
+      ffbSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 11002, reuseAddress: true);
       ffbSocket!.listen((RawSocketEvent event) {
         if (event == RawSocketEvent.read) {
           Datagram? dg = ffbSocket!.receive();
           if (dg != null && dg.data.isNotEmpty) {
             int cmd = dg.data[0];
 
-            // CMD 1: Force Feedback (Vibración)
-            if (cmd == 1) {
-              HapticFeedback.heavyImpact();
-            }
-            // CMD 2: Telemetría [Comando, Marcha, Luces LED]
-            else if (cmd == 2 && dg.data.length >= 3) {
-              int gearInt = dg.data[1];
-              int leds = dg.data[2];
+            // CMD 1: Force Feedback Dinámico (Vibración)
+            if (cmd == 1 && dg.data.length >= 2) {
+              int intensity = dg.data[1]; // Recibe valor de 0 a 255
 
-              String gearStr = "N";
-              if (gearInt == 0) {
-                gearStr = "R";
-              } else if (gearInt == 1) {
-                gearStr = "N";
-              } else {
-                gearStr = (gearInt - 1).toString();
+              if (intensity > 0) {
+                int now = DateTime.now().millisecondsSinceEpoch;
+
+                // THROTTLING LOCAL: Asegura que el celular procese los comandos sin congelarse
+                if (now - _lastVibrationTime >= 15) {
+                  if (_hasCustomVibration) {
+
+                    // --- MAGIA ADAPTATIVA MEJORADA: Escalones de contraste puro ---
+                    int calcDuration;
+                    int finalAmplitude = intensity;
+
+                    if (intensity < 80) {
+                      // Pianos o rozamientos: vibración eléctrica corta
+                      calcDuration = 15;
+                    } else if (intensity < 180) {
+                      // Baches medios: vibración notable
+                      calcDuration = 45;
+                    } else {
+                      // Choques o muros: impacto sostenido y agresivo
+                      calcDuration = 120;
+                      finalAmplitude = 255;
+                    }
+
+                    Vibration.vibrate(duration: calcDuration, amplitude: finalAmplitude);
+                  } else {
+                    // Modo de compatibilidad para celulares antiguos
+                    if (intensity > 180) {
+                      HapticFeedback.heavyImpact();
+                    } else if (intensity > 90) {
+                      HapticFeedback.mediumImpact();
+                    } else {
+                      HapticFeedback.lightImpact();
+                    }
+                  }
+                  _lastVibrationTime = now;
+                }
               }
-
-              setState(() {
-                currentGear = gearStr;
-                ledsLit = leds;
-              });
             }
           }
         }
@@ -1137,7 +1090,7 @@ class _PlayScreenState extends State<PlayScreen> {
         final bool shouldPop = await _showExitConfirmationDialog();
         if (shouldPop && context.mounted) {
           SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-          SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); // Restaurar UI al salir
+          SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
           Navigator.of(context).pop();
         }
       },
@@ -1145,10 +1098,6 @@ class _PlayScreenState extends State<PlayScreen> {
         body: Stack(
           children: [
             ...uiElements.map((element) {
-              if (element.type == 'telemetry') {
-                return Positioned(left: element.x, top: element.y, child: _buildTelemetryUI(element.width, element.height));
-              }
-
               double currentSliderPercent = sliderVisualValues[element.id] ?? 0.0;
               bool isButtonPressed = buttonVisualStates[element.id] ?? false;
 
@@ -1194,66 +1143,6 @@ class _PlayScreenState extends State<PlayScreen> {
             }),
           ],
         ),
-      ),
-    );
-  }
-
-  // EL PLAYSCREEN DEBE TENER LA TELEMETRÍA DINÁMICA
-  Widget _buildTelemetryUI(double width, double height) {
-    return Container(
-      width: width, height: height,
-      clipBehavior: Clip.hardEdge,
-      decoration: BoxDecoration(
-        color: const Color(0xFF111111),
-        border: Border.all(color: Colors.grey.shade800, width: 2),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 10, spreadRadius: 2)],
-      ),
-      child: Column(
-        children: [
-          SizedBox(
-            height: height * 0.25,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: List.generate(15, (index) {
-                  Color ledColor;
-                  if (index < 5) {
-                    ledColor = Colors.greenAccent;
-                  } else if (index < 10) {
-                    ledColor = Colors.redAccent;
-                  } else {
-                    ledColor = Colors.blueAccent;
-                  }
-
-                  // MAGIA DINÁMICA
-                  bool isLit = index < ledsLit;
-
-                  return Container(
-                    width: (width - 40) / 15,
-                    decoration: BoxDecoration(
-                      color: isLit ? ledColor : ledColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(2),
-                      boxShadow: isLit ? [BoxShadow(color: ledColor, blurRadius: 5, spreadRadius: 1)] : null,
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: FittedBox(
-                fit: BoxFit.contain,
-                // MAGIA DINÁMICA
-                child: Text(currentGear, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Courier')),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

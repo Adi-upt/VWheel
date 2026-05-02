@@ -16,7 +16,6 @@ namespace VWheel
     public partial class MainForm : Form
     {
         private UdpClient udpServer;
-        private UdpClient simHubListener; // NUEVO: Escucha a SimHub
 
         private bool isListening = false;
         private bool isBroadcasting = false;
@@ -28,6 +27,7 @@ namespace VWheel
 
         private IPEndPoint lastPhoneEP = null;
         private vJoy.FfbCbFunc ffbCallback;
+        private Stopwatch ffbThrottleTimer = Stopwatch.StartNew(); // Evita saturar la red con el FFB
 
         // Language Variables
         private Label lblLangToggle;
@@ -43,6 +43,8 @@ namespace VWheel
             InitializeComponent();
             this.Text = "VWheel Receiver - Server";
             joystick = new vJoy();
+
+            // Registramos la función que escuchará el Force Feedback nativo de Windows
             ffbCallback = new vJoy.FfbCbFunc(OnFFBEvent);
 
             lblAbout.UseMnemonic = false;
@@ -180,9 +182,6 @@ namespace VWheel
             listenerThread.IsBackground = true;
             listenerThread.Start();
 
-            // NUEVO: Iniciamos el puente de Telemetría
-            StartSimHubListener();
-
             StartBeacon();
             Task.Run(() => WatchdogTimeout());
 
@@ -190,66 +189,6 @@ namespace VWheel
             else txtLog.Text = Tr.Get("waiting");
 
             CheckFFBSupport();
-        }
-
-        // --- PUENTE DE TELEMETRÍA (SIMHUB a C# a MÓVIL) ---
-        private void StartSimHubListener()
-        {
-            try
-            {
-                simHubListener = new UdpClient(11003);
-                Thread simHubThread = new Thread(() =>
-                {
-                    IPEndPoint ep = new IPEndPoint(IPAddress.Any, 0);
-                    while (isListening)
-                    {
-                        try
-                        {
-                            byte[] data = simHubListener.Receive(ref ep);
-                            string msg = System.Text.Encoding.UTF8.GetString(data);
-                            string[] parts = msg.Split(';');
-
-                            // Esperamos: Marcha ; RPM_Actual ; RPM_Maximo
-                            if (parts.Length >= 3)
-                            {
-                                string gearStr = parts[0].Trim();
-                                float rpm = 0, maxRpm = 8000;
-
-                                float.TryParse(parts[1], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out rpm);
-                                float.TryParse(parts[2], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out maxRpm);
-
-                                if (maxRpm <= 0) maxRpm = 8000; // Si el juego no reporta el max, asumimos V8
-
-                                // Conversión de Marcha (SimHub manda N o R como texto)
-                                byte gearByte = 1;
-                                if (gearStr == "R") gearByte = 0;
-                                else if (gearStr == "N") gearByte = 1;
-                                else if (byte.TryParse(gearStr, out byte g)) gearByte = (byte)(g + 1);
-
-                                // Lógica de Shift Lights (Empiezan a prender al 40% de las RPM del coche real)
-                                float rpmPercent = rpm / maxRpm;
-                                byte leds = 0;
-                                if (rpmPercent > 0.4f)
-                                {
-                                    leds = (byte)Math.Min(15, ((rpmPercent - 0.4f) / 0.6f) * 15f);
-                                }
-                                if (rpmPercent >= 0.98f) leds = 15; // Shift Flash!
-
-                                // Disparo de telemetría a tu celular al instante
-                                if (lastPhoneEP != null && udpServer != null)
-                                {
-                                    byte[] telData = new byte[] { 2, gearByte, leds };
-                                    udpServer.SendAsync(telData, 3, new IPEndPoint(lastPhoneEP.Address, 11002));
-                                }
-                            }
-                        }
-                        catch { }
-                    }
-                });
-                simHubThread.IsBackground = true;
-                simHubThread.Start();
-            }
-            catch { }
         }
 
         private void StartBeacon()
@@ -362,6 +301,7 @@ namespace VWheel
                 if (joystick.AcquireVJD(deviceId))
                 {
                     isVJoyAcquired = true;
+                    // Registramos el callback para que Windows nos avise de impactos físicos
                     joystick.FfbRegisterGenCB(ffbCallback, IntPtr.Zero);
                     CheckFFBSupport();
                 }
@@ -388,17 +328,68 @@ namespace VWheel
             }
         }
 
+        // --- MOTOR DE FORCE FEEDBACK UNIVERSAL AVANZADO (v1.0.6) ---
         private void OnFFBEvent(IntPtr data, object userData)
         {
-            if (lastPhoneEP != null && udpServer != null)
+            if (lastPhoneEP == null || udpServer == null) return;
+
+            // Limitamos a 60Hz para no saturar la red (máx ~60Hz de vibración)
+            if (ffbThrottleTimer.ElapsedMilliseconds < 15) return;
+            ffbThrottleTimer.Restart();
+
+            try
             {
-                try
+                FFBPType type = new FFBPType();
+                if (joystick.Ffb_h_Type(data, ref type) == 0) // 0 significa Éxito
                 {
-                    byte[] vibData = new byte[] { 1 };
-                    udpServer.SendAsync(vibData, 1, new IPEndPoint(lastPhoneEP.Address, 11002));
+                    float force = 0; // Guardará la fuerza combinada del impacto
+                    byte ffbIntensity = 0; // Valor final para el celular (0-255)
+
+                    // 1. EXTRAER MAGNITUD DE EFECTOS CONSTANTES (Choques duros, muros, baches)
+                    if (type == FFBPType.PT_CONSTREP || type == FFBPType.PT_EFFREP)
+                    {
+                        vJoy.FFB_EFF_CONSTANT effect = new vJoy.FFB_EFF_CONSTANT();
+                        if (joystick.Ffb_h_Eff_Constant(data, ref effect) == 0)
+                        {
+                            // Extraemos la magnitud cruda (puede ser negativa o positiva, tomamos el valor absoluto)
+                            force = Math.Abs(effect.Magnitude);
+
+                            // Mapeo dinámico: La magnitud de vJoy va de 0 a 10000.
+                            float normalized = (force / 10000f) * 255f;
+
+                            // Amplificamos *2 para que los baches se sientan con violencia
+                            ffbIntensity = (byte)Math.Min(255, Math.Max(0, normalized * 2f));
+                        }
+                        else ffbIntensity = 150; // Fallback si falla la lectura
+                    }
+
+                    // 2. EXTRAER MAGNITUD DE EFECTOS PERIÓDICOS (Pianos, texturas, vibración motor)
+                    else if (type == FFBPType.PT_PRIDREP)
+                    {
+                        vJoy.FFB_EFF_PERIOD effect = new vJoy.FFB_EFF_PERIOD();
+                        if (joystick.Ffb_h_Eff_Period(data, ref effect) == 0)
+                        {
+                            force = Math.Abs(effect.Magnitude);
+
+                            // Normalización a PWM
+                            float normalized = (force / 10000f) * 255f;
+
+                            // Amplificamos *1.5 para pianos agresivos
+                            ffbIntensity = (byte)Math.Min(255, Math.Max(0, normalized * 1.5f));
+                        }
+                        else ffbIntensity = 80; // Fallback
+                    }
+
+                    // FILTRO DE BASURA: Los juegos envían fuerzas residuales (rozamiento del aire, etc)
+                    // Ignoramos intensidades menores a 15 para que no vibre constantemente "sin razón".
+                    if (ffbIntensity > 15)
+                    {
+                        byte[] vibData = new byte[] { 1, ffbIntensity };
+                        udpServer.SendAsync(vibData, 2, new IPEndPoint(lastPhoneEP.Address, 11002));
+                    }
                 }
-                catch { }
             }
+            catch { }
         }
 
         private void UpdateTelemetryUI(double angle, uint throttle, uint brake, uint clutch, uint buttons)
@@ -428,7 +419,6 @@ namespace VWheel
 
             isListening = false;
             isBroadcasting = false;
-            simHubListener?.Close();
             udpServer?.Close();
 
             if (isVJoyAcquired) joystick.RelinquishVJD(deviceId);
@@ -464,14 +454,14 @@ namespace VWheel
                     { "perm_title", "Permission Denied" },
                     { "admin_req", "Administrator privileges are required to auto-configure vJoy." },
                     { "waiting", "=== SERVER STARTED ===\r\n\r\nWaiting for automatic mobile connection...\r\n(Auto-start enabled)" },
-                    { "disconnected", "=== VWHEEL TELEMETRY ===\r\n\r\nMobile disconnected.\r\nvJoy successfully released.\r\nWaiting for reconnection..." },
+                    { "disconnected", "=== VWHEEL INPUTS ===\r\n\r\nMobile disconnected.\r\nvJoy successfully released.\r\nWaiting for reconnection..." },
                     { "telemetry", "=== VWHEEL INPUTS ===" },
                     { "steer", "Steering (X Axis): " },
                     { "accel", "Throttle (Y Axis): " },
                     { "brake", "Brake (Z Axis):    " },
                     { "clutch", "Clutch (Rx Axis):  " },
                     { "btns", "Buttons (32-bit):  " },
-                    { "about", "VWheel Server v1.0.2\nCreated by Adi\nFeedback & Support on X: @ItsAdi916" },
+                    { "about", "VWheel Server v1.0.6 (Universal FFB)\nCreated by Adi\nFeedback & Support on X: @ItsAdi916" },
                     { "link_err", "Link Error" },
                     { "browser_err", "Could not open the browser. Find me on X as @ItsAdi916" },
                     { "exit_app", "Exit VWheel" },
@@ -496,7 +486,7 @@ namespace VWheel
                     { "brake", "Freno (Eje Z):     " },
                     { "clutch", "Embrague (Eje Rx): " },
                     { "btns", "Botones (32 bits): " },
-                    { "about", "VWheel Server v1.0.2\nCreado por Adi\nFeedback y Soporte en X: @ItsAdi916" },
+                    { "about", "VWheel Server v1.0.6 (Universal FFB)\nCreado por Adi\nFeedback y Soporte en X: @ItsAdi916" },
                     { "link_err", "Error de Enlace" },
                     { "browser_err", "No se pudo abrir el navegador. Búscame en X como @ItsAdi916" },
                     { "exit_app", "Salir de VWheel" },

@@ -3,7 +3,7 @@
 ; Non-commercial use only
 
 #define MyAppName "VWheel"
-#define MyAppVersion "1.0.2"
+#define MyAppVersion "1.0.6"
 #define MyAppPublisher "Adi Co."
 #define MyAppExeName "VWheel.exe"
 
@@ -23,7 +23,7 @@ PrivilegesRequired=admin
 
 ; El instalador final ahora se guardará directo en tu carpeta "Instaladores"
 OutputDir=S:\Otros\PROYECTO-VOLANTE-VIRTUAL\Instaladores
-OutputBaseFilename=VWheel_Server_v1.0.2_Installer
+OutputBaseFilename=VWheel_Server_v1.0.6_Installer
 SetupIconFile=S:\Otros\PROYECTO-VOLANTE-VIRTUAL\VWheel\logo.ico
 SolidCompression=yes
 WizardStyle=modern dynamic
